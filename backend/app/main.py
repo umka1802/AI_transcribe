@@ -2,7 +2,6 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from .database import init_db
 from .config import settings
@@ -24,8 +23,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["https://ai-transcribe.onrender.com"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
