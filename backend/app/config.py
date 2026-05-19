@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: list[str] = ["mp3", "wav", "m4a", "ogg", "aac", "flac"]
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "whisper-1"
-    WHISPER_MODEL_SIZE: str = "base"
+    WHISPER_MODEL_SIZE: str = "tiny"
     STORAGE_RETENTION_DAYS: int = 30
     MAX_UPLOADS_PER_USER: int = 100
     RATE_LIMIT_PER_MINUTE: int = 10

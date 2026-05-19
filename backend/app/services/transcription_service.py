@@ -11,13 +11,16 @@ class TranscriptionService:
         self._use_local = False
         self._use_api = False
         self._load_error = ""
-        self._load_model()
+        self._model_loaded = False
 
-    def _load_model(self):
+    def _ensure_model(self):
+        if self._model_loaded:
+            return
         if settings.OPENAI_API_KEY:
             self._use_api = True
         else:
             self._init_local_model()
+        self._model_loaded = True
 
     def _init_local_model(self):
         self._model = None
@@ -41,6 +44,7 @@ class TranscriptionService:
                 self._load_error = f"whisper failed: {self._load_error}; {str(e)}"
 
     async def transcribe(self, file_path: str, language: str = None) -> dict:
+        self._ensure_model()
         if self._use_api:
             return await self._transcribe_api(file_path, language)
         elif self._use_local and self._model is not None:
