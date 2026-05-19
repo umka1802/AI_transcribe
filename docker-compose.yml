@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./transcriber.db
+      - SECRET_KEY=change-this-in-production
+      - UPLOAD_DIR=uploads
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/transcriber.db:/app/transcriber.db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
