@@ -1,8 +1,9 @@
 import os
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
-from ..database import get_db
+from ..database import get_db, async_session
 from ..models.user import User
 from ..models.task import TranscriptionTask
 from ..schemas.task import TranscriptionTaskResponse, TranscriptionTaskList
@@ -51,6 +52,54 @@ async def upload_audio(
     return {"task_id": task.id, "filename": file_info["original_filename"], "status": "uploaded"}
 
 
+async def _run_transcription(task_id: int, user_id: int, file_path: str, language: str | None):
+    async with async_session() as db:
+        try:
+            result = await db.execute(select(TranscriptionTask).where(
+                TranscriptionTask.id == task_id,
+                TranscriptionTask.user_id == user_id,
+            ))
+            task = result.scalar_one_or_none()
+            if not task:
+                return
+
+            result_data = await transcription_service.transcribe(file_path, language)
+
+            user_result = await db.execute(select(User).where(User.id == user_id))
+            user = user_result.scalar_one_or_none()
+
+            if "error" in result_data and result_data["error"]:
+                task.status = "error"
+                task.error_message = result_data["error"]
+            else:
+                task.status = "completed"
+                task.result_text = result_data.get("text", "")
+                task.language = result_data.get("language", task.language)
+                task.duration_seconds = result_data.get("duration")
+                from datetime import datetime, timezone
+                task.completed_at = datetime.now(timezone.utc)
+
+                if user:
+                    user.total_transcriptions += 1
+                    user.storage_used += task.file_size
+
+            await db.commit()
+            from ..utils.logging import log_action
+            await log_action(db, "INFO", "transcription_completed" if task.status == "completed" else "transcription_error",
+                             user_id, f"Task {task_id}: {task.status}")
+
+        except Exception as e:
+            try:
+                task.status = "error"
+                task.error_message = str(e)
+                await db.commit()
+                from ..utils.logging import log_action
+                await log_action(db, "ERROR", "transcription_failed", user_id,
+                                 f"Task {task_id}: {str(e)}")
+            except Exception:
+                pass
+
+
 @router.post("/{task_id}/transcribe")
 async def start_transcription(
     task_id: int,
@@ -69,49 +118,20 @@ async def start_transcription(
     if task.status not in ("uploaded", "error"):
         raise HTTPException(status_code=400, detail=f"Invalid status: {task.status}")
 
-    task.status = "processing"
-    await db.commit()
-
     file_path = get_file_path(current_user.id, task.filename)
     if not os.path.exists(file_path):
-        task.status = "error"
-        task.error_message = "File not found"
-        await db.commit()
         raise HTTPException(status_code=404, detail="File not found")
+
+    task.status = "processing"
+    await db.commit()
 
     await log_action(db, "INFO", "transcription_started", current_user.id,
                      f"Task {task_id} started", request.client.host)
 
-    try:
-        lang = task.language if task.language else None
-        result_data = await transcription_service.transcribe(file_path, lang)
+    lang = task.language if task.language else None
+    asyncio.create_task(_run_transcription(task.id, current_user.id, file_path, lang))
 
-        if "error" in result_data and result_data["error"]:
-            task.status = "error"
-            task.error_message = result_data["error"]
-        else:
-            task.status = "completed"
-            task.result_text = result_data.get("text", "")
-            task.language = result_data.get("language", task.language)
-            task.duration_seconds = result_data.get("duration")
-            from datetime import datetime, timezone
-            task.completed_at = datetime.now(timezone.utc)
-
-            current_user.total_transcriptions += 1
-            current_user.storage_used += task.file_size
-
-        await db.commit()
-        await log_action(db, "INFO", "transcription_completed" if task.status == "completed" else "transcription_error",
-                         current_user.id, f"Task {task_id}: {task.status}", request.client.host)
-
-    except Exception as e:
-        task.status = "error"
-        task.error_message = str(e)
-        await db.commit()
-        await log_action(db, "ERROR", "transcription_failed", current_user.id,
-                         f"Task {task_id}: {str(e)}", request.client.host)
-
-    return {"task_id": task.id, "status": task.status}
+    return {"task_id": task.id, "status": "processing"}
 
 
 @router.get("/tasks", response_model=TranscriptionTaskList)
