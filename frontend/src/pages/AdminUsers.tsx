@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
-import { getUsers, updateUser, deleteUser } from '../api/admin'
+import { getUsers, createUser, updateUser, deleteUser } from '../api/admin'
 import type { User } from '../types'
 import toast from 'react-hot-toast'
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [form, setForm] = useState({ email: '', username: '', password: '' })
+  const [creating, setCreating] = useState(false)
 
   const load = async () => {
     try {
@@ -51,11 +54,40 @@ export default function AdminUsers() {
     }
   }
 
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.email || !form.username || !form.password) {
+      toast.error('All fields are required')
+      return
+    }
+    setCreating(true)
+    try {
+      await createUser(form.email, form.username, form.password)
+      toast.success('User created')
+      setShowModal(false)
+      setForm({ email: '', username: '', password: '' })
+      load()
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to create user')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   if (loading) return <div className="text-gray-500">Loading...</div>
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">User Management</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+        <button
+          onClick={() => setShowModal(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+        >
+          + Add User
+        </button>
+      </div>
+
       <div className="bg-white rounded-xl border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
@@ -98,6 +130,62 @@ export default function AdminUsers() {
           </tbody>
         </table>
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Create User</h2>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email" required
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input
+                  type="text" required
+                  value={form.username}
+                  onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="username"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password" required
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="password"
+                />
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {creating ? 'Creating...' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

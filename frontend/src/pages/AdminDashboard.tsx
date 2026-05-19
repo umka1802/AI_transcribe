@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getDashboard } from '../api/admin'
 import type { DashboardStats } from '../types'
-import { Users, ListTodo, CheckCircle, XCircle, Activity } from 'lucide-react'
+import { Users, ListTodo, CheckCircle, XCircle, Activity, Loader } from 'lucide-react'
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -14,8 +14,16 @@ export default function AdminDashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="text-gray-500">Loading...</div>
-  if (!stats) return <div className="text-red-500">Failed to load dashboard</div>
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-gray-500">
+      <Loader className="h-6 w-6 animate-spin mr-2" /> Loading dashboard...
+    </div>
+  )
+  if (!stats) return (
+    <div className="flex items-center justify-center py-20 text-red-500">
+      <XCircle className="h-6 w-6 mr-2" /> Failed to load dashboard
+    </div>
+  )
 
   const cards = [
     { label: 'Total Users', value: stats.total_users, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -30,7 +38,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {cards.map((card) => (
-          <div key={card.label} className="bg-white rounded-xl border p-6">
+          <div key={card.label} className="bg-white rounded-xl border p-6 hover:shadow-sm transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">{card.label}</p>
@@ -50,11 +58,11 @@ export default function AdminDashboard() {
             <Activity className="h-5 w-5 mr-2 text-gray-400" /> Recent Tasks
           </h2>
           {stats.recent_tasks.length === 0 ? (
-            <p className="text-sm text-gray-500">No recent tasks</p>
+            <p className="text-sm text-gray-400 py-4 text-center">No recent tasks</p>
           ) : (
             <div className="space-y-3">
               {stats.recent_tasks.map((t) => (
-                <div key={t.id} className="flex items-center justify-between text-sm">
+                <div key={t.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
                   <span className="text-gray-700 truncate max-w-[200px]">{t.filename}</span>
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                     t.status === 'completed' ? 'bg-green-100 text-green-800' :
@@ -72,12 +80,12 @@ export default function AdminDashboard() {
             <Activity className="h-5 w-5 mr-2 text-gray-400" /> Recent Logs
           </h2>
           {stats.recent_logs.length === 0 ? (
-            <p className="text-sm text-gray-500">No recent logs</p>
+            <p className="text-sm text-gray-400 py-4 text-center">No recent logs</p>
           ) : (
             <div className="space-y-3">
               {stats.recent_logs.map((l) => (
-                <div key={l.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">{l.action}</span>
+                <div key={l.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
+                  <span className="text-gray-700 truncate max-w-[200px]">{l.action}</span>
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                     l.level === 'ERROR' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
                   }`}>{l.level}</span>

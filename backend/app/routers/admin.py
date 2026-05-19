@@ -6,11 +6,12 @@ from ..models.user import User
 from ..models.task import TranscriptionTask
 from ..models.system_log import SystemLog
 from ..models.system_setting import SystemSetting
-from ..schemas.user import UserResponse, UserUpdate
+from ..schemas.user import UserResponse, UserUpdate, UserCreate
 from ..schemas.task import TranscriptionTaskResponse
 from ..schemas.setting import SettingResponse, SettingUpdate
 from ..schemas.log import LogResponse
 from ..utils.deps import get_admin_user
+from ..utils.auth import get_password_hash
 from ..utils.logging import log_action
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -102,6 +103,36 @@ async def delete_user(
                      f"User {user_id} deleted by admin", request.client.host)
 
     return {"message": "User deleted"}
+
+
+@router.post("/users", response_model=UserResponse, status_code=201)
+async def create_user(
+    user_data: UserCreate,
+    request: Request,
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    existing = await db.execute(select(User).where(
+        (User.email == user_data.email) | (User.username == user_data.username)
+    ))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email or username already exists")
+
+    user = User(
+        email=user_data.email,
+        username=user_data.username,
+        hashed_password=get_password_hash(user_data.password),
+        is_active=True,
+        is_admin=False,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    await log_action(db, "INFO", "user_created_by_admin", admin.id,
+                     f"User {user.username} created by admin", request.client.host)
+
+    return user
 
 
 @router.get("/tasks", response_model=list[TranscriptionTaskResponse])

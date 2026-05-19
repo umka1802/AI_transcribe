@@ -1,6 +1,11 @@
 import api from './client'
 import type { User, Task, LogEntry, Setting, DashboardStats, TaskStats } from '../types'
 
+export async function createUser(email: string, username: string, password: string): Promise<User> {
+  const { data } = await api.post('/admin/users', { email, username, password })
+  return data
+}
+
 export async function getUsers(): Promise<User[]> {
   const { data } = await api.get('/admin/users')
   return data
