@@ -22,10 +22,14 @@ class TranscriptionService:
 
     def _init_local_model(self):
         try:
-            import whisper
-            self._model = whisper.load_model(settings.WHISPER_MODEL_SIZE)
+            from faster_whisper import WhisperModel
+            model_size = settings.WHISPER_MODEL_SIZE
+            compute_type = "int8"
+            self._model = WhisperModel(model_size, device="cpu", compute_type=compute_type)
             self._use_local = True
         except ImportError:
+            pass
+        except Exception:
             pass
 
     async def transcribe(self, file_path: str, language: str = None) -> dict:
@@ -36,7 +40,14 @@ class TranscriptionService:
         else:
             if settings.OPENAI_API_KEY:
                 return await self._transcribe_api(file_path, language)
-            return {"text": "", "error": "No transcription model available"}
+            try:
+                from faster_whisper import WhisperModel
+                model_size = settings.WHISPER_MODEL_SIZE
+                self._model = WhisperModel(model_size, device="cpu", compute_type="int8")
+                self._use_local = True
+                return await self._transcribe_local(file_path, language)
+            except Exception as e:
+                return {"text": "", "error": f"No transcription model: {str(e)}", "language": language}
 
     async def _transcribe_api(self, file_path: str, language: str = None) -> dict:
         try:
@@ -67,18 +78,28 @@ class TranscriptionService:
             if language == "auto":
                 language = None
 
-            result = self._model.transcribe(
+            segments, info = self._model.transcribe(
                 file_path,
                 language=language,
                 task="transcribe",
-                verbose=False,
+                beam_size=5,
             )
 
+            text_parts = []
+            segment_list = []
+            for seg in segments:
+                text_parts.append(seg.text)
+                segment_list.append({
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text,
+                })
+
             return {
-                "text": result.get("text", ""),
-                "language": result.get("language", language),
-                "duration": result.get("duration", None),
-                "segments": result.get("segments", None),
+                "text": " ".join(text_parts),
+                "language": info.language if info else language,
+                "duration": info.duration if info else None,
+                "segments": segment_list,
             }
         except Exception as e:
             return {"text": "", "error": str(e), "language": language}
