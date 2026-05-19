@@ -75,20 +75,9 @@ class TranscriptionService:
             if language == "auto":
                 language = None
 
-            import inspect
-            is_whisper = "whisper" in str(type(self._model))
+            is_faster = "faster_whisper" in type(self._model).__module__
 
-            if is_whisper:
-                result = self._model.transcribe(
-                    file_path, language=language, task="transcribe", verbose=False,
-                )
-                return {
-                    "text": result.get("text", ""),
-                    "language": result.get("language", language),
-                    "duration": result.get("duration", None),
-                    "segments": result.get("segments", None),
-                }
-            else:
+            if is_faster:
                 seg_iter, info = self._model.transcribe(
                     file_path, language=language, task="transcribe", beam_size=5,
                 )
@@ -102,6 +91,16 @@ class TranscriptionService:
                     "language": info.language if info else language,
                     "duration": info.duration if info else None,
                     "segments": segment_list,
+                }
+            else:
+                result = self._model.transcribe(
+                    file_path, language=language, task="transcribe", verbose=False,
+                )
+                return {
+                    "text": result.get("text", ""),
+                    "language": result.get("language", language),
+                    "duration": result.get("duration", None),
+                    "segments": result.get("segments", None),
                 }
         except Exception as e:
             return {"text": "", "error": str(e), "language": language}
