@@ -75,9 +75,7 @@ class TranscriptionService:
             if language == "auto":
                 language = None
 
-            is_faster = "faster_whisper" in type(self._model).__module__
-
-            if is_faster:
+            try:
                 seg_iter, info = self._model.transcribe(
                     file_path, language=language, task="transcribe", beam_size=5,
                 )
@@ -92,7 +90,7 @@ class TranscriptionService:
                     "duration": info.duration if info else None,
                     "segments": segment_list,
                 }
-            else:
+            except TypeError:
                 result = self._model.transcribe(
                     file_path, language=language, task="transcribe", verbose=False,
                 )
